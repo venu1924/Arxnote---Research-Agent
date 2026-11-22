@@ -1,27 +1,36 @@
-# Research Agent
+# Arxnote
 
-A research agent that pulls papers from ArXiv, chunks them for retrieval, and answers questions with LangGraph, GPT-4o, Pinecone, and Google SerpAPI.
+Arxnote is a research agent for questions about papers and methods. It opens ArXiv first, records every lookup, and writes a short report that stays inside those sources.
 
-This repository is the research agent from the project notebook, plus Arxnote, the React desk that runs the same tools.
+Live desk: [arxnote-tech-da19.vercel.app](https://arxnote-tech-da19.vercel.app)
 
-The notebook is `notebooks/research_agent.ipynb`. The desk is the Next.js app in `arxnote/`.
+Ask “What is the ArXiv paper 1706.03762 about?” The scratchpad should show the paper fetch, and the report should name *Attention Is All You Need*.
 
-## What part 1 does
+## What you get
 
-1. Query the ArXiv API and save the result as JSON and a pandas DataFrame.
-2. Download each paper PDF.
-3. Split the PDFs into overlapping chunks and expand the table so each chunk is its own row, with links to the previous and next chunk.
-4. Prepare an OpenAI embedding encoder (`text-embedding-3-small`) and a Pinecone serverless index named `langgraph-research-agent`.
-5. Upsert chunk embeddings into that index.
-6. Add the agent tools: ArXiv abstract fetch, Google search through SerpAPI, filtered and open RAG search, and a `final_answer` report writer.
-7. Initialize the decision prompt (`gpt-4o`) and the scratchpad that records tool calls.
-8. Build the LangGraph loop: `run_oracle`, `router`, `run_tool`, and `build_report`.
+The desk is a Next.js app in `arxnote/`. A question runs through four tools, and each result appears before the report:
 
-Sections 1–3, the ArXiv fetch tool, the router, and `build_report` run with no API keys. Embeddings, Pinecone, and the live model need `OPENAI_API_KEY`. Pinecone also needs `PINECONE_API_KEY`. Web search needs `SERPAPI_API_KEY`. Cells that need a missing key skip with a short message.
+| Tool | What it does |
+| --- | --- |
+| `fetch_arxiv` | Opens one paper by ArXiv id and reads the abstract |
+| `arxiv_search` | Searches ArXiv for related papers |
+| `web_search` | Adds Google results when `SERPAPI_API_KEY` is set |
+| `final_answer` | Writes the introduction, steps, body, conclusion, and source list |
 
-## The desk
+With `OPENAI_API_KEY`, GPT-4o chooses the tools and writes the report. Without it, the same page still answers from the live ArXiv abstracts. Tool text is treated as evidence, not as instructions.
 
-`arxnote/` is the Next.js app. Ask a question and it searches ArXiv, opens abstracts, and writes a sourced brief. With `OPENAI_API_KEY` the same request is written by gpt-4o. With `SERPAPI_API_KEY` it also runs a Google search.
+The notebook in `notebooks/research_agent.ipynb` is the full pipeline behind that desk: ArXiv export, PDF download, chunking, Pinecone retrieval, and a LangGraph loop.
+
+## Repository layout
+
+```
+arxnote/                         Next.js desk
+notebooks/research_agent.ipynb   LangGraph research pipeline
+requirements.txt                 Python dependencies
+.env.example                     Key names for the notebook
+```
+
+## Run the desk
 
 ```bash
 cd arxnote
@@ -29,16 +38,65 @@ npm install
 npm run dev
 ```
 
-The dev server listens on port 3847.
+Open [http://127.0.0.1:3847](http://127.0.0.1:3847).
 
-## Run it
+On Windows PowerShell, from the repository root:
+
+```powershell
+cd arxnote
+npm install
+npm run dev
+```
+
+## Run the notebook
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
+```
+
+Windows:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+macOS and Linux:
+
+```bash
 source .venv/bin/activate
+```
+
+Then:
+
+```bash
 pip install -r requirements.txt
-cp .env.example .env
+copy .env.example .env
 jupyter lab notebooks/research_agent.ipynb
 ```
 
-The first code cells use a small `max_results` so the notebook finishes quickly. Raise it to `100` for the full corpus used in the original project.
+Use `cp .env.example .env` instead of `copy` on macOS and Linux. Put keys only in `.env`. Leave `.env.example` empty.
+
+The early notebook cells use a small `max_results` so they finish quickly. Raise it when you want a larger corpus.
+
+## Environment
+
+| Name | Used by |
+| --- | --- |
+| `OPENAI_API_KEY` | GPT-4o in the desk, and embeddings in the notebook |
+| `SERPAPI_API_KEY` | Google search in the desk and the notebook |
+| `PINECONE_API_KEY` | The notebook vector index `langgraph-research-agent` |
+
+ArXiv fetch, PDF download, chunking, and the desk’s ArXiv brief run with no keys. Cells that need a missing key skip with a short message.
+
+## Notebook pipeline
+
+1. Query the ArXiv API and save papers as JSON and a pandas table.
+2. Download each PDF.
+3. Split the PDFs into overlapping chunks, with links to the previous and next chunk.
+4. Embed chunks with `text-embedding-3-small` and store them in a Pinecone serverless index.
+5. Define the tools: ArXiv abstract fetch, Google search, open and filtered retrieval, and `final_answer`.
+6. Run the LangGraph loop: decide, route, call a tool, and build the report.
+
+## Stack
+
+Next.js, React, TypeScript, and Tailwind for the desk. Python, LangChain, LangGraph, Pinecone, and Jupyter for the notebook. ArXiv is the paper source. SerpAPI is the optional web source. GPT-4o is the optional writer.
